@@ -330,7 +330,27 @@ def render_projects_table(filters: Dict[str, Any]):
         )
     
     if not projects:
-        st.info("No projects found matching the criteria. Run the data pipeline to discover projects.")
+        st.markdown(
+            \"\"\"
+            <div style='text-align: center; padding: 40px; background: linear-gradient(135deg, #1e3a5f 0%, #2a5298 100%); border-radius: 10px; margin: 20px 0;'>
+                <h3 style='color: #ffd700;'>🎯 No Projects Found!</h3>
+                <p style='color: #e0e0e0; font-size: 16px; margin: 20px 0;'>
+                    Get started by generating demo data or running the scraper
+                </p>
+                <div style='display: flex; justify-content: center; gap: 20px; margin-top: 20px;'>
+                    <div style='padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;'>
+                        <p style='color: #4CAF50; font-size: 18px; margin: 0;'>\u261d\ufe0f Step 1</p>
+                        <p style='color: #e0e0e0; margin: 5px 0;'>Click "Generate Demo Projects"</p>
+                    </div>
+                    <div style='padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;'>
+                        <p style='color: #2196F3; font-size: 18px; margin: 0;'>\u270c\ufe0f Step 2</p>
+                        <p style='color: #e0e0e0; margin: 5px 0;'>Explore dashboard & analytics</p>
+                    </div>
+                </div>
+            </div>
+            \"\"\",
+            unsafe_allow_html=True
+        )
         return
     
     # Convert to DataFrame
@@ -384,24 +404,41 @@ def render_pipeline_control():
     st.sidebar.markdown("---")
     st.sidebar.header("⚙️ Data Pipeline")
     
-    # Add demo data button
-    if st.sidebar.button("📊 Generate Demo Data", disabled=st.session_state.pipeline_running):
+    # Check if database has projects
+    projects_count = len(db_manager.get_all_projects())
+    
+    if projects_count == 0:
+        st.sidebar.warning("⚠️ No projects in database yet!")
+        st.sidebar.info("👉 Generate demo data to test the platform")
+    else:
+        st.sidebar.success(f"✅ {projects_count} projects in database")
+    
+    # Add demo data button - prominently displayed
+    if st.sidebar.button("📊 Generate 15 Demo Projects", 
+                         disabled=st.session_state.pipeline_running,
+                         type="primary",
+                         use_container_width=True):
         with st.spinner("Generating demo data..."):
             try:
                 from utils.demo_data import DemoDataGenerator
                 generator = DemoDataGenerator()
                 count = generator.generate_sample_projects(count=15)
-                st.success(f"✅ Generated {count} demo projects!")
+                st.sidebar.success(f"✅ Generated {count} projects!")
                 st.session_state.last_refresh = datetime.now()
                 time.sleep(1)
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Failed: {str(e)}")
+                st.sidebar.error(f"❌ Failed: {str(e)}")
+                logger.error(f"Demo data generation failed: {e}")
     
-    if st.sidebar.button("▶️ Run Pipeline (Background)", disabled=st.session_state.pipeline_running):
-        st.sidebar.info("⏳ Pipeline running in background...")
-        st.sidebar.info("💡 Tip: Add demo data first for instant results!")
+    st.sidebar.markdown("---")
+    
+    # Run pipeline button
+    if st.sidebar.button("🔍 Run Live Scraper", 
+                         disabled=st.session_state.pipeline_running,
+                         use_container_width=True):
         st.session_state.pipeline_running = True
+        st.rerun()  # Trigger rerun to start streaming
     
     # Show last scraping logs
     st.sidebar.markdown("### Recent Activity")
@@ -450,6 +487,7 @@ def main():
     if st.session_state.pipeline_running:
         st.markdown("---")
         st.subheader("🔄 Live Project Discovery")
+        st.info("🌐 Searching for projects from Saudi Arabian sources...")
         
         # Create placeholders
         status_container = st.empty()
@@ -461,6 +499,7 @@ def main():
             pipeline = DataPipeline()
             
             discovered_projects = []
+            total_discovered = 0
             
             # Stream results
             for result in pipeline.run_streaming_pipeline():
@@ -468,6 +507,9 @@ def main():
                 if result.get('scraped', 0) > 0:
                     progress = result.get('processed', 0) / result.get('scraped', 1)
                     progress_bar.progress(min(progress, 1.0))
+                else:
+                    # Still searching
+                    progress_bar.progress(0.1)
                 
                 # Update status metrics
                 with status_container.container():
@@ -481,24 +523,34 @@ def main():
                 if result.get('project'):
                     proj = result['project']
                     discovered_projects.append(proj)
+                    total_discovered += 1
                     
                     with projects_container:
-                        # Show latest 5 discoveries
-                        for p in discovered_projects[-5:]:
+                        # Clear and show latest 5 discoveries
+                        st.markdown(f"### 🎯 Latest Discoveries (Total: {total_discovered})")
+                        for idx, p in enumerate(reversed(discovered_projects[-5:]), 1):
                             status_emoji = "✨" if p.get('status_type') == 'new' else "🔄"
-                            st.success(f"{status_emoji} **{p.get('project_name', 'Unknown')}**")
-                            
-                            col_a, col_b, col_c = st.columns(3)
-                            col_a.text(f"📍 {p.get('region', 'N/A')}")
-                            col_b.text(f"🏢 {p.get('project_owner', 'N/A')}")
-                            col_c.text(f"💰 {p.get('project_value', 'N/A')}")
-                            st.markdown("---")
+                            with st.container():
+                                st.markdown(f"**{idx}. {status_emoji} {p.get('project_name', 'Unknown')}**")
+                                
+                                col_a, col_b, col_c = st.columns(3)
+                                col_a.text(f"📍 {p.get('region', 'N/A')}")
+                                col_b.text(f"🏢 {p.get('project_owner', 'N/A')[:30]}")
+                                col_c.text(f"💰 {p.get('project_value', 'N/A')}")
+                                st.markdown("---")
                 
                 # Check completion
                 if result.get('completed'):
-                    st.success(f"🎉 Pipeline completed! Found {result.get('added', 0)} new projects in {result.get('duration', 0)}s")
+                    progress_bar.progress(1.0)
+                    
+                    if result.get('added', 0) > 0:
+                        st.success(f"🎉 Pipeline completed! Found {result.get('added', 0)} new projects in {result.get('duration', 0)}s")
+                    else:
+                        st.warning(f"⚠️ Pipeline completed but no new projects found. Duration: {result.get('duration', 0)}s")
+                        st.info("💡 Tip: The scrapers search live websites. Try generating demo data for instant results!")
+                    
                     st.session_state.pipeline_running = False
-                    time.sleep(2)
+                    time.sleep(3)
                     st.rerun()
                     break
                 
@@ -510,7 +562,9 @@ def main():
             
         except Exception as e:
             st.error(f"❌ Pipeline error: {str(e)}")
+            logger.error(f"Streaming pipeline failed: {e}")
             st.session_state.pipeline_running = False
+            st.info("💡 Try generating demo data instead for instant results!")
     
     # Render projects table
     render_projects_table(filters)
