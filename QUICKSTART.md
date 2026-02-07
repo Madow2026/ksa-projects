@@ -1,5 +1,33 @@
 # Quick Start Guide
 
+## 🌐 Using Streamlit Cloud (Easiest!)
+
+**No installation needed! Try it now:**
+
+### ⚡ 2-Step Quick Start
+
+1. **Open the app**: https://ksa-projects-2026.streamlit.app
+2. **Click the blue button** in the left sidebar: `📊 Generate 15 Demo Projects`
+3. ✅ Done! Explore the dashboard
+
+### 🎯 What to Do After Generating Data
+
+- **📊 Dashboard Tab**: View KPIs, charts, and recent projects
+- **🔍 Smart Search**: Search by project name, owner, or contractor
+- **🎨 Filters**: Filter by region, category, status (in sidebar)
+- **📈 Analytics**: View distribution charts
+
+### 🔍 Advanced: Live Web Scraping
+
+Want real projects from Saudi websites?
+- Click: `🔍 Run Live Scraper` in sidebar
+- Watch projects appear in real-time
+- **Note**: Takes 2-5 minutes (connects to actual websites)
+
+💡 **Tip**: For instant results, always use demo data!
+
+---
+
 ## 🚀 Get Started in 5 Minutes
 
 ### Step 1: Install Python
