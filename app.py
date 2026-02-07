@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
 from typing import Dict, Any, List
+from loguru import logger
 
 # Page configuration
 st.set_page_config(
@@ -331,7 +332,7 @@ def render_projects_table(filters: Dict[str, Any]):
     
     if not projects:
         st.markdown(
-            \"\"\"
+            """
             <div style='text-align: center; padding: 40px; background: linear-gradient(135deg, #1e3a5f 0%, #2a5298 100%); border-radius: 10px; margin: 20px 0;'>
                 <h3 style='color: #ffd700;'>🎯 No Projects Found!</h3>
                 <p style='color: #e0e0e0; font-size: 16px; margin: 20px 0;'>
@@ -339,16 +340,16 @@ def render_projects_table(filters: Dict[str, Any]):
                 </p>
                 <div style='display: flex; justify-content: center; gap: 20px; margin-top: 20px;'>
                     <div style='padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;'>
-                        <p style='color: #4CAF50; font-size: 18px; margin: 0;'>\u261d\ufe0f Step 1</p>
+                        <p style='color: #4CAF50; font-size: 18px; margin: 0;'>☝️ Step 1</p>
                         <p style='color: #e0e0e0; margin: 5px 0;'>Click "Generate Demo Projects"</p>
                     </div>
                     <div style='padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;'>
-                        <p style='color: #2196F3; font-size: 18px; margin: 0;'>\u270c\ufe0f Step 2</p>
+                        <p style='color: #2196F3; font-size: 18px; margin: 0;'>✌️ Step 2</p>
                         <p style='color: #e0e0e0; margin: 5px 0;'>Explore dashboard & analytics</p>
                     </div>
                 </div>
             </div>
-            \"\"\",
+            """,
             unsafe_allow_html=True
         )
         return
