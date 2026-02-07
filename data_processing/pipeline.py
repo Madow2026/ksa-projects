@@ -91,6 +91,164 @@ class DataPipeline:
         
         return summary
     
+    def run_streaming_pipeline(self, parallel_scraping: bool = False):
+        """
+        Run pipeline with streaming results - yields each project as discovered
+        
+        Yields:
+            Dict with project info and current stats
+        """
+        start_time = datetime.utcnow()
+        logger.info("========== Starting Streaming Pipeline ==========")
+        
+        # Reset counters
+        self.scraped_count = 0
+        self.processed_count = 0
+        self.added_count = 0
+        self.updated_count = 0
+        self.rejected_count = 0
+        self.error_count = 0
+        
+        # Yield initial status
+        yield {
+            'searching': True,
+            'scraped': 0,
+            'processed': 0,
+            'added': 0,
+            'updated': 0,
+            'rejected': 0,
+            'project': None
+        }
+        
+        try:
+            # Step 1: Scrape data
+            logger.info("Scraping data from sources...")
+            scraped_items = scraper_orchestrator.scrape_all(parallel=parallel_scraping)
+            self.scraped_count = len(scraped_items)
+            logger.info(f"Found {self.scraped_count} items to process")
+            
+            # Step 2: Process each item and yield results
+            for idx, item in enumerate(scraped_items, 1):
+                try:
+                    # Process the item
+                    project_data = self._process_item_with_return(item)
+                    
+                    if project_data:
+                        # Yield the discovered project
+                        yield {
+                            'searching': idx < len(scraped_items),
+                            'scraped': self.scraped_count,
+                            'processed': idx,
+                            'added': self.added_count,
+                            'updated': self.updated_count,
+                            'rejected': self.rejected_count,
+                            'project': project_data
+                        }
+                    else:
+                        # Project was rejected
+                        yield {
+                            'searching': idx < len(scraped_items),
+                            'scraped': self.scraped_count,
+                            'processed': idx,
+                            'added': self.added_count,
+                            'updated': self.updated_count,
+                            'rejected': self.rejected_count,
+                            'project': None
+                        }
+                
+                except Exception as e:
+                    logger.error(f"Error processing item {idx}: {e}")
+                    self.error_count += 1
+            
+            # Final update
+            self._update_statistics()
+            
+            # Yield completion status
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            yield {
+                'searching': False,
+                'completed': True,
+                'scraped': self.scraped_count,
+                'processed': self.processed_count,
+                'added': self.added_count,
+                'updated': self.updated_count,
+                'rejected': self.rejected_count,
+                'duration': round(duration, 2),
+                'project': None
+            }
+            
+            logger.info("========== Streaming Pipeline Complete ==========")
+            
+        except Exception as e:
+            logger.error(f"Pipeline error: {e}")
+            yield {
+                'error': True,
+                'message': str(e),
+                'searching': False
+            }
+    
+    def _process_item_with_return(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Process item and return project data if successful
+        Similar to _process_item but returns the project data
+        """
+        try:
+            source_url = item.get('url', '')
+            source_type = item.get('source_type', 'Website')
+            text = item.get('text', '')
+            
+            if not text:
+                self.rejected_count += 1
+                return None
+            
+            # AI extraction
+            project_data = ai_engine.extract_project_info(text, source_url)
+            
+            if not project_data:
+                self.rejected_count += 1
+                return None
+            
+            # Calculate confidence
+            confidence = ai_engine.calculate_confidence_score(project_data)
+            project_data['confidence_score'] = confidence
+            
+            # Check confidence threshold
+            if confidence < CONFIDENCE_THRESHOLD:
+                self.rejected_count += 1
+                logger.debug(f"Rejected low confidence project: {confidence}")
+                return None
+            
+            # Check for duplicates
+            similar = db_manager.find_similar_projects(
+                project_data.get('project_name', ''),
+                project_data.get('region', '')
+            )
+            
+            if similar:
+                # Update existing
+                project_id = similar[0]['id']
+                self._update_existing_project(project_id, project_data, source_url)
+                self.updated_count += 1
+                project_data['id'] = project_id
+                project_data['status_type'] = 'updated'
+                return project_data
+            else:
+                # Add new
+                project_id = self._add_new_project(project_data, source_url, source_type)
+                if project_id:
+                    self.added_count += 1
+                    project_data['id'] = project_id
+                    project_data['status_type'] = 'new'
+                    return project_data
+            
+            self.processed_count += 1
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error processing item: {e}")
+            self.error_count += 1
+            return None
+    
     def _process_item(self, item: Dict[str, Any]) -> Optional[int]:
         """
         Process a single scraped item:

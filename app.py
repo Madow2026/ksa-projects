@@ -384,37 +384,24 @@ def render_pipeline_control():
     st.sidebar.markdown("---")
     st.sidebar.header("⚙️ Data Pipeline")
     
-    if st.sidebar.button("▶️ Run Pipeline", disabled=st.session_state.pipeline_running):
-        st.session_state.pipeline_running = True
-        
-        with st.spinner("Running data pipeline... This may take a few minutes."):
+    # Add demo data button
+    if st.sidebar.button("📊 Generate Demo Data", disabled=st.session_state.pipeline_running):
+        with st.spinner("Generating demo data..."):
             try:
-                # Run pipeline
-                summary = data_pipeline.run_full_pipeline(parallel_scraping=False)
-                
-                # Show results
-                st.success("✅ Pipeline completed successfully!")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Scraped", summary['scraped'])
-                    st.metric("Added", summary['added'])
-                with col2:
-                    st.metric("Updated", summary['updated'])
-                    st.metric("Rejected", summary['rejected'])
-                
-                st.info(f"Duration: {summary['duration_seconds']:.2f} seconds")
-                
-                # Refresh data
+                from utils.demo_data import DemoDataGenerator
+                generator = DemoDataGenerator()
+                count = generator.generate_sample_projects(count=15)
+                st.success(f"✅ Generated {count} demo projects!")
                 st.session_state.last_refresh = datetime.now()
-                
-            except Exception as e:
-                st.error(f"❌ Pipeline failed: {str(e)}")
-            
-            finally:
-                st.session_state.pipeline_running = False
-                time.sleep(2)
+                time.sleep(1)
                 st.rerun()
+            except Exception as e:
+                st.error(f"❌ Failed: {str(e)}")
+    
+    if st.sidebar.button("▶️ Run Pipeline (Background)", disabled=st.session_state.pipeline_running):
+        st.sidebar.info("⏳ Pipeline running in background...")
+        st.sidebar.info("💡 Tip: Add demo data first for instant results!")
+        st.session_state.pipeline_running = True
     
     # Show last scraping logs
     st.sidebar.markdown("### Recent Activity")
@@ -458,6 +445,72 @@ def main():
     
     # Render pipeline control (sidebar)
     render_pipeline_control()
+    
+    # Real-time streaming display if pipeline is running
+    if st.session_state.pipeline_running:
+        st.markdown("---")
+        st.subheader("🔄 Live Project Discovery")
+        
+        # Create placeholders
+        status_container = st.empty()
+        progress_bar = st.progress(0)
+        projects_container = st.container()
+        
+        try:
+            from data_processing.pipeline import DataPipeline
+            pipeline = DataPipeline()
+            
+            discovered_projects = []
+            
+            # Stream results
+            for result in pipeline.run_streaming_pipeline():
+                # Update progress
+                if result.get('scraped', 0) > 0:
+                    progress = result.get('processed', 0) / result.get('scraped', 1)
+                    progress_bar.progress(min(progress, 1.0))
+                
+                # Update status metrics
+                with status_container.container():
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("🔍 Found", result.get('scraped', 0))
+                    col2.metric("✅ Added", result.get('added', 0))
+                    col3.metric("🔄 Updated", result.get('updated', 0))
+                    col4.metric("❌ Rejected", result.get('rejected', 0))
+                
+                # Display new project immediately
+                if result.get('project'):
+                    proj = result['project']
+                    discovered_projects.append(proj)
+                    
+                    with projects_container:
+                        # Show latest 5 discoveries
+                        for p in discovered_projects[-5:]:
+                            status_emoji = "✨" if p.get('status_type') == 'new' else "🔄"
+                            st.success(f"{status_emoji} **{p.get('project_name', 'Unknown')}**")
+                            
+                            col_a, col_b, col_c = st.columns(3)
+                            col_a.text(f"📍 {p.get('region', 'N/A')}")
+                            col_b.text(f"🏢 {p.get('project_owner', 'N/A')}")
+                            col_c.text(f"💰 {p.get('project_value', 'N/A')}")
+                            st.markdown("---")
+                
+                # Check completion
+                if result.get('completed'):
+                    st.success(f"🎉 Pipeline completed! Found {result.get('added', 0)} new projects in {result.get('duration', 0)}s")
+                    st.session_state.pipeline_running = False
+                    time.sleep(2)
+                    st.rerun()
+                    break
+                
+                # Check for errors
+                if result.get('error'):
+                    st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
+                    st.session_state.pipeline_running = False
+                    break
+            
+        except Exception as e:
+            st.error(f"❌ Pipeline error: {str(e)}")
+            st.session_state.pipeline_running = False
     
     # Render projects table
     render_projects_table(filters)
