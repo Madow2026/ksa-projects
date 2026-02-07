@@ -1,0 +1,53 @@
+# Saudi Projects Intelligence Platform - Requirements
+
+# Core Framework
+streamlit==1.31.0
+python-dotenv==1.0.0
+
+# Web Scraping
+requests==2.31.0
+beautifulsoup4==4.12.3
+selenium==4.16.0
+webdriver-manager==4.0.1
+scrapy==2.11.0
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.3
+
+# Database
+sqlalchemy==2.0.25
+
+# AI & NLP
+openai==1.10.0
+langchain==0.1.4
+langchain-openai==0.0.5
+sentence-transformers==2.3.1
+transformers==4.37.2
+torch==2.2.0
+
+# Arabic NLP
+camel-tools==1.5.2
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
+
+# Visualization
+plotly==5.18.0
+folium==0.15.1
+streamlit-folium==0.16.0
+altair==5.2.0
+
+# Utilities
+pydantic==2.5.3
+aiohttp==3.9.2
+schedule==1.2.1
+loguru==0.7.2
+python-dateutil==2.8.2
+tqdm==4.66.1
+
+# Date & Time
+pytz==2024.1
+
+# Export
+openpyxl==3.1.2
+xlsxwriter==3.1.9
