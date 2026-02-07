@@ -58,7 +58,8 @@ CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
 ENABLE_WEB_SCRAPING = os.getenv("ENABLE_WEB_SCRAPING", "true").lower() == "true"
 ENABLE_NEWS_SCRAPING = os.getenv("ENABLE_NEWS_SCRAPING", "true").lower() == "true"
 ENABLE_LINKEDIN_SCRAPING = os.getenv("ENABLE_LINKEDIN_SCRAPING", "false").lower() == "true"
-ENABLE_MAPS_SCRAPING = os.getenv("ENABLE_MAPS_SCRAPING", "true").lower() == "true"
+# Strict policy: never scrape Google Maps / private platforms.
+ENABLE_MAPS_SCRAPING = os.getenv("ENABLE_MAPS_SCRAPING", "false").lower() == "true"
 
 # Saudi Arabia Regions
 SAUDI_REGIONS = [
@@ -131,7 +132,48 @@ PROJECT_KEYWORDS_AR = [
 ]
 
 # Status Keywords for Classification
-ACTIVE_KEYWORDS = ["active", "ongoing", "under construction", "in progress", "نشط", "قيد الإنشاء"]
+# Keep these broad enough to capture awarded/started projects, but still let
+# completed/cancelled keywords take precedence.
+ACTIVE_KEYWORDS = [
+    # English
+    "active",
+    "ongoing",
+    "under construction",
+    "in progress",
+    "construction started",
+    "construction began",
+    "work began",
+    "work begins",
+    "started",
+    "starts",
+    "groundbreaking",
+    "site work",
+    "mobilization",
+    "awarded",
+    "contract awarded",
+    "contract signed",
+    "commencement",
+    "commence",
+    "commenced",
+    # Arabic
+    "نشط",
+    "قيد الإنشاء",
+    "قيد الانشاء",
+    "تحت الإنشاء",
+    "تحت الانشاء",
+    "قيد التنفيذ",
+    "تحت التنفيذ",
+    "جاري التنفيذ",
+    "بدء التنفيذ",
+    "بدأ التنفيذ",
+    "بدء الأعمال",
+    "بدأت الأعمال",
+    "ترسية",
+    "ترسية العقد",
+    "تمت الترسية",
+    "توقيع عقد",
+    "وضع حجر الأساس",
+]
 COMPLETED_KEYWORDS = ["completed", "finished", "delivered", "inaugurated", "مكتمل", "منجز"]
 CANCELLED_KEYWORDS = ["cancelled", "suspended", "halted", "stopped", "ملغي", "متوقف"]
 
@@ -145,13 +187,30 @@ CONFIDENCE_WEIGHTS = {
 
 # Source Reliability Scores
 SOURCE_RELIABILITY = {
-    "arabnews.com": 0.9,
-    "constructionweekonline.com": 0.85,
-    "zawya.com": 0.85,
-    "meedprojects.com": 0.9,
-    "saudigazette.com.sa": 0.8,
-    "linkedin.com": 0.75,
-    "maps.google.com": 0.7,
+    # Official / government
+    "spa.gov.sa": 1.0,
+    "vision2030.gov.sa": 1.0,
+    # Official mega-projects
+    "neom.com": 1.0,
+    "qiddiya.com": 1.0,
+    "redseaglobal.com": 1.0,
+    "diriyah.sa": 1.0,
+    "roshn.sa": 1.0,
+    # Trusted project/news sources
+    "meed.com": 0.9,
+    "zawya.com": 0.9,
+    "constructionweekonline.com": 0.9,
+    "arabianbusiness.com": 0.85,
+    "saudigazette.com.sa": 0.85,
+    "thenationalnews.com": 0.85,
+    "arabnews.com": 0.85,
+    # Arabic trusted
+    "aleqt.com": 0.85,
+    "sabq.org": 0.8,
+    "okaz.com.sa": 0.8,
+    "aawsat.com": 0.8,
+    "almadinah.com": 0.8,
+    "makkahnewspaper.com": 0.8,
     "default": 0.5
 }
 

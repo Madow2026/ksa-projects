@@ -14,8 +14,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from scrapers.google_news_scraper import google_news_scraper
 from scrapers.spa_scraper import spa_scraper
-from scrapers.meed_scraper import meed_scraper
-from scrapers.arabic_news_scraper import arabic_news_scraper
 
 
 class ScraperOrchestrator:
@@ -33,13 +31,11 @@ class ScraperOrchestrator:
         """Initialize all trusted scrapers"""
         self.scrapers = [
             google_news_scraper,
-            spa_scraper,
-            meed_scraper,
-            arabic_news_scraper
+            spa_scraper
         ]
         
         logger.info(f"✅ Initialized {len(self.scrapers)} TRUSTED scrapers")
-        logger.info("📋 Sources: Google News RSS, SPA, MEED, Arabic News")
+        logger.info("📋 Sources: Google News RSS (discovery-only), SPA (official)")
     
     def scrape_all(self, parallel: bool = False) -> List[Dict[str, Any]]:
         """

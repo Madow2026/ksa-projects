@@ -117,7 +117,8 @@ class DataPipeline:
             'added': 0,
             'updated': 0,
             'rejected': 0,
-            'project': None
+            'project': None,
+            'rejected_reason': None
         }
         
         try:
@@ -131,7 +132,7 @@ class DataPipeline:
             for idx, item in enumerate(scraped_items, 1):
                 try:
                     # Process the item
-                    project_data = self._process_item_with_return(item)
+                    project_data, rejected_reason = self._process_item_with_return(item)
                     
                     if project_data:
                         # Yield the discovered project
@@ -142,7 +143,8 @@ class DataPipeline:
                             'added': self.added_count,
                             'updated': self.updated_count,
                             'rejected': self.rejected_count,
-                            'project': project_data
+                            'project': project_data,
+                            'rejected_reason': None
                         }
                     else:
                         # Project was rejected
@@ -153,7 +155,8 @@ class DataPipeline:
                             'added': self.added_count,
                             'updated': self.updated_count,
                             'rejected': self.rejected_count,
-                            'project': None
+                            'project': None,
+                            'rejected_reason': rejected_reason
                         }
                 
                 except Exception as e:
@@ -174,7 +177,8 @@ class DataPipeline:
                 'updated': self.updated_count,
                 'rejected': self.rejected_count,
                 'duration': round(duration, 2),
-                'project': None
+                'project': None,
+                'rejected_reason': None
             }
             
             logger.info("========== Streaming Pipeline Complete ==========")
@@ -187,7 +191,7 @@ class DataPipeline:
                 'searching': False
             }
     
-    def _process_item_with_return(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _process_item_with_return(self, item: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Process item and return project data if successful
         Similar to _process_item but returns the project data
@@ -196,33 +200,42 @@ class DataPipeline:
             source_url = item.get('url', '')
             source_type = item.get('source_type', 'Website')
             text = item.get('text', '')
+            source_name = item.get('source_name')
+            reliability_score = float(item.get('reliability_score') or get_source_reliability(source_url))
+            official_source = bool(item.get('official_source', False))
             
             if not text:
                 self.rejected_count += 1
-                return None
+                return None, "missing_text"
             
             # AI extraction
             project_data = ai_engine.extract_project_info(text, source_url)
             
             if not project_data:
                 self.rejected_count += 1
-                return None
+                return None, "ai_or_rules_rejected"
             
             # Calculate confidence
             confidence = ai_engine.calculate_confidence_score(project_data)
-            project_data['confidence_score'] = confidence
+            # Base confidence combines extractor confidence + source reliability
+            base_confidence = max(0.0, min(1.0, (confidence * 0.7) + (reliability_score * 0.3)))
+            project_data['confidence_score'] = base_confidence
             
-            # Check confidence threshold
-            if confidence < CONFIDENCE_THRESHOLD:
+            # If missing critical fields, keep but will be low confidence.
+            # We only hard-reject when status is not active/ongoing/under construction.
+            status = (project_data.get('status') or "").strip()
+            if status not in ["Active", "Ongoing", "Under Construction"]:
                 self.rejected_count += 1
-                logger.debug(f"Rejected low confidence project: {confidence}")
-                return None
+                return None, f"inactive_status:{status or 'missing'}"
+
+            # Ensure DB-required fields exist
+            if not project_data.get('region'):
+                project_data['region'] = "Unknown"
+            if not project_data.get('category'):
+                project_data['category'] = "Infrastructure"
             
-            # Check for duplicates
-            similar = db_manager.find_similar_projects(
-                project_data.get('project_name', ''),
-                project_data.get('region', '')
-            )
+            # Check for duplicates (semantic-ish by name)
+            similar = db_manager.find_similar_projects(project_data.get('project_name', ''))
             
             if similar:
                 # Update existing
@@ -231,7 +244,20 @@ class DataPipeline:
                 self.updated_count += 1
                 project_data['id'] = project_id
                 project_data['status_type'] = 'updated'
-                return project_data
+                # Add/refresh source with reliability and title
+                try:
+                    db_manager.add_source(project_id, {
+                        'source_url': source_url,
+                        'source_type': source_type,
+                        'source_title': item.get('title') or source_name,
+                        'reliability_score': reliability_score
+                    })
+                except Exception:
+                    pass
+
+                # Update confidence based on source count + official
+                self._recompute_confidence(project_id, official_source)
+                return project_data, None
             else:
                 # Add new
                 project_id = self._add_new_project(project_data, source_url, source_type)
@@ -239,15 +265,60 @@ class DataPipeline:
                     self.added_count += 1
                     project_data['id'] = project_id
                     project_data['status_type'] = 'new'
-                    return project_data
+                    # Add source metadata
+                    try:
+                        db_manager.add_source(project_id, {
+                            'source_url': source_url,
+                            'source_type': source_type,
+                            'source_title': item.get('title') or source_name,
+                            'reliability_score': reliability_score
+                        })
+                    except Exception:
+                        pass
+
+                    self._recompute_confidence(project_id, official_source)
+                    return project_data, None
             
             self.processed_count += 1
-            return None
+            return None, "not_saved"
             
         except Exception as e:
             logger.error(f"Error processing item: {e}")
             self.error_count += 1
-            return None
+            return None, f"exception:{e}"
+
+    def _recompute_confidence(self, project_id: int, official_source: bool):
+        """Recompute confidence based on requested policy.
+
+        - Official source => High
+        - 2+ sources => Medium
+        - 1 non-official source => Low
+        """
+        try:
+            sources = db_manager.get_project_sources(project_id)
+            source_count = len(sources)
+
+            # Determine if any official/high-reliability source exists
+            max_rel = max([s.get('reliability_score', 0.5) for s in sources], default=0.5)
+            any_official = official_source or (max_rel >= 0.99)
+
+            # Confidence bands
+            if any_official:
+                confidence = 0.92
+                verified = True
+            elif source_count >= 2:
+                confidence = 0.78
+                verified = True
+            else:
+                confidence = 0.62
+                verified = False
+
+            db_manager.update_project(project_id, {
+                'confidence_score': confidence,
+                'is_verified': verified
+            })
+        except Exception as e:
+            logger.warning(f"Could not recompute confidence: {e}")
     
     def _process_item(self, item: Dict[str, Any]) -> Optional[int]:
         """

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, func, and_, or_
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from contextlib import contextmanager
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Iterator
 from datetime import datetime, timedelta
 import sys
 from pathlib import Path
@@ -55,7 +55,7 @@ class DatabaseManager:
                 session.commit()
     
     @contextmanager
-    def get_session(self) -> Session:
+    def get_session(self) -> Iterator[Session]:
         """Context manager for database sessions"""
         session = self.SessionLocal()
         try:
@@ -145,14 +145,55 @@ class DatabaseManager:
             session.commit()
             return True
     
-    def find_similar_projects(self, project_name: str, threshold: float = 0.8) -> List[Dict]:
-        """Find projects with similar names (simple matching)"""
+    def find_similar_projects(self, project_name: str, threshold: float = 0.82) -> List[Dict]:
+        """Find projects with similar names using lightweight semantic similarity.
+
+        Notes:
+        - No heavy ML deps (cloud-friendly).
+        - Uses a combination of token overlap and SequenceMatcher ratio.
+        """
+        import re
+        from difflib import SequenceMatcher
+
+        def normalize(name: str) -> str:
+            name = (name or "").lower()
+            name = re.sub(r"[^\w\s-]", " ", name)
+            name = re.sub(r"\s+", " ", name).strip()
+            return name
+
+        def token_set(name: str) -> set[str]:
+            toks = [t for t in normalize(name).split(" ") if len(t) > 2]
+            return set(toks)
+
+        target_norm = normalize(project_name)
+        target_tokens = token_set(project_name)
+        if not target_norm:
+            return []
+
+        # Pre-filter candidates via SQL ilike on a short prefix token to keep it fast.
+        prefix = target_norm[:18]
         with self.get_session() as session:
-            # Simple similarity: check if 80% of words match
-            projects = session.query(Project).filter(
-                Project.project_name.ilike(f"%{project_name[:20]}%")
-            ).all()
-            return [p.to_dict() for p in projects]
+            candidates = session.query(Project).filter(Project.project_name.ilike(f"%{prefix}%")).limit(200).all()
+
+            results: List[Dict] = []
+            for p in candidates:
+                cand_name = p.project_name or ""
+                cand_norm = normalize(cand_name)
+                if not cand_norm:
+                    continue
+
+                ratio = SequenceMatcher(None, target_norm, cand_norm).ratio()
+                cand_tokens = token_set(cand_name)
+                if target_tokens and cand_tokens:
+                    overlap = len(target_tokens & cand_tokens) / max(len(target_tokens), 1)
+                else:
+                    overlap = 0.0
+
+                score = max(ratio, overlap)
+                if score >= threshold:
+                    results.append(p.to_dict())
+
+            return results
     
     # ==================== Source Operations ====================
     

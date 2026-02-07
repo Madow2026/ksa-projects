@@ -188,13 +188,15 @@ Otherwise return the extracted fields as JSON object.
         
         # STEP 3: Must contain active project indicators
         active_indicators_en = [
-            'under construction', 'construction began', 'construction started', 'awarded',
-            'contract signed', 'starts construction', 'groundbreaking', 'commence',
-            'ongoing', 'in progress', 'being built', 'being developed', 'announced'
+            'under construction', 'construction began', 'construction started',
+            'awarded', 'contract awarded',
+            'contract signed', 'starts construction', 'groundbreaking', 'commencement', 'commence', 'commenced',
+            'ongoing', 'in progress', 'being built'
         ]
         active_indicators_ar = [
-            'تحت التنفيذ', 'قيد التنفيذ', 'بدء التنفيذ', 'بدأ البناء', 'جاري التنفيذ',
-            'ترسية', 'توقيع عقد', 'إطلاق', 'إعلان', 'تطوير', 'إنشاء'
+            'تحت التنفيذ', 'قيد التنفيذ', 'بدء التنفيذ', 'بدأ التنفيذ', 'بدأ البناء', 'جاري التنفيذ',
+            'ترسية', 'ترسية العقد', 'تمت الترسية', 'توقيع عقد',
+            'وضع حجر الأساس'
         ]
         
         has_active_indicator = any(ind in text_lower for ind in active_indicators_en + active_indicators_ar + ACTIVE_KEYWORDS)
@@ -256,19 +258,49 @@ Otherwise return the extracted fields as JSON object.
     
     def _classify_status(self, text: str) -> str:
         """Classify project status from text"""
-        text_lower = text.lower()
-        
-        # Check for active keywords
+        text_lower = (text or "").lower()
+
+        # Completed / cancelled signals first (so pipeline can reject reliably)
+        if any(k in text_lower for k in COMPLETED_KEYWORDS) or any(k in text for k in ["تم الانتهاء", "اكتمل", "افتتح", "تم افتتاح", "تم التسليم", "مكتمل", "منجز"]):
+            return "Completed"
+        if any(k in text_lower for k in CANCELLED_KEYWORDS) or any(k in text for k in ["ألغي", "الغاء", "توقف", "متوقف", "معلق", "تم إيقاف"]):
+            return "Cancelled"
+
+        # Strong active/ongoing signals
+        under_construction_markers = [
+            "under construction",
+            "construction started",
+            "construction began",
+            "groundbreaking",
+        ]
+        ongoing_markers = [
+            "ongoing",
+            "in progress",
+            "progress",
+            "phase",
+        ]
+        under_construction_markers_ar = [
+            "قيد الإنشاء",
+            "قيد الانشاء",
+            "تحت الإنشاء",
+            "تحت الانشاء",
+            "وضع حجر الأساس",
+            "بدأت الأعمال",
+            "بدء الأعمال",
+            "بدأ التنفيذ",
+            "بدء التنفيذ",
+        ]
+
+        if any(m in text_lower for m in under_construction_markers) or any(m in text for m in under_construction_markers_ar):
+            return "Under Construction"
+        if any(m in text_lower for m in ongoing_markers) or any(m in text for m in ["جاري", "قيد التنفيذ", "تحت التنفيذ", "جاري التنفيذ"]):
+            return "Ongoing"
+
+        # General active indicators
         for keyword in ACTIVE_KEYWORDS:
-            if keyword in text_lower:
-                if "under construction" in text_lower:
-                    return "Under Construction"
-                elif "ongoing" in text_lower:
-                    return "Ongoing"
-                else:
-                    return "Active"
-        
-        # Default for new projects
+            if keyword.lower() in text_lower or keyword in text:
+                return "Active"
+
         return "Announced"
     
     def _extract_region(self, text: str) -> Optional[str]:

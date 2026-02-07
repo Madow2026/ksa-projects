@@ -152,12 +152,10 @@ class SPAScraper:
                 if element:
                     text = element.get_text(separator='\n', strip=True)
                     break
-            
-            if not text:
-                paragraphs = soup.find_all('p')
-                text = '\n'.join([p.get_text(strip=True) for p in paragraphs])
-            
-            return text[:5000]
+
+            # IMPORTANT: Do not fall back to generic paragraph scraping.
+            # If structured selectors fail, return empty and let pipeline log the reason.
+            return text[:5000] if text else ""
             
         except Exception as e:
             logger.warning(f"Could not fetch SPA article from {url}: {e}")

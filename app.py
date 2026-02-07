@@ -492,6 +492,7 @@ def main():
         
         # Create placeholders
         status_container = st.empty()
+        rejection_note = st.empty()
         progress_bar = st.progress(0)
         projects_container = st.container()
         
@@ -519,6 +520,9 @@ def main():
                     col2.metric("✅ Added", result.get('added', 0))
                     col3.metric("🔄 Updated", result.get('updated', 0))
                     col4.metric("❌ Rejected", result.get('rejected', 0))
+
+                if result.get('rejected_reason'):
+                    rejection_note.caption(f"Last rejection: {result['rejected_reason']}")
                 
                 # Display new project immediately
                 if result.get('project'):

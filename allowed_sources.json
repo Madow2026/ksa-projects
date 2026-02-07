@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "policy": {
+    "note": "STRICT allowlist. Only these public sources may be fetched/parsed.",
+    "disallow_private_platforms": true,
+    "google_news_rss_discovery_only": true
+  },
+  "keywords": {
+    "en": [
+      "Saudi Arabia project under construction",
+      "project awarded Saudi Arabia",
+      "project commencement Saudi Arabia",
+      "infrastructure project Saudi Arabia"
+    ],
+    "ar": [
+      "مشروع تحت التنفيذ السعودية",
+      "بدء تنفيذ مشروع",
+      "ترسية مشروع",
+      "مشروع جديد"
+    ]
+  },
+  "allowed_domains": {
+    "spa.gov.sa": {"name": "Saudi Press Agency (SPA)", "official": true, "reliability": 1.0},
+    "vision2030.gov.sa": {"name": "Vision 2030", "official": true, "reliability": 1.0},
+
+    "neom.com": {"name": "NEOM", "official": true, "reliability": 1.0},
+    "qiddiya.com": {"name": "Qiddiya", "official": true, "reliability": 1.0},
+    "redseaglobal.com": {"name": "Red Sea Global", "official": true, "reliability": 1.0},
+    "diriyah.sa": {"name": "Diriyah", "official": true, "reliability": 1.0},
+    "roshn.sa": {"name": "ROSHN", "official": true, "reliability": 1.0},
+
+    "meed.com": {"name": "MEED", "official": false, "reliability": 0.9},
+    "zawya.com": {"name": "Zawya", "official": false, "reliability": 0.9},
+    "constructionweekonline.com": {"name": "Construction Week Middle East", "official": false, "reliability": 0.9},
+    "arabianbusiness.com": {"name": "Arabian Business", "official": false, "reliability": 0.85},
+    "saudigazette.com.sa": {"name": "Saudi Gazette", "official": false, "reliability": 0.85},
+    "thenationalnews.com": {"name": "The National", "official": false, "reliability": 0.85},
+    "arabnews.com": {"name": "Arab News", "official": false, "reliability": 0.85},
+
+    "aleqt.com": {"name": "الاقتصادية", "official": false, "reliability": 0.85},
+    "sabq.org": {"name": "سبق", "official": false, "reliability": 0.8},
+    "okaz.com.sa": {"name": "عكاظ", "official": false, "reliability": 0.8},
+    "aawsat.com": {"name": "الشرق الأوسط", "official": false, "reliability": 0.8},
+    "almadinah.com": {"name": "المدينة", "official": false, "reliability": 0.8},
+    "makkahnewspaper.com": {"name": "مكة", "official": false, "reliability": 0.8}
+  },
+  "rss_feeds": [
+    {
+      "name": "Saudi Press Agency (SPA)",
+      "url": "https://www.spa.gov.sa/rss.php",
+      "language": "ar",
+      "official": true
+    }
+  ]
+}
