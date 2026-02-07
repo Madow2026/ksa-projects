@@ -79,64 +79,77 @@ class AIEngine:
         """Extract project information using OpenAI GPT"""
         try:
             prompt = f"""
-You are an expert at extracting structured project information from text about construction and development projects in Saudi Arabia.
+You are an expert at extracting structured project information from Arabic and English text about construction projects in Saudi Arabia.
 
-Extract the following information from the text below. If information is not found, use null.
+Extract project information ONLY IF the project is ACTIVE, ONGOING, or UNDER CONSTRUCTION.
 
-Required fields:
-- project_name: The official project name
+CRITICAL REJECTION RULES (مهم جداً):
+❌ REJECT if project is completed (تم الانتهاء، افتتح، اكتمل، finished, completed, inaugurated, delivered)
+❌ REJECT if project is cancelled (ألغي، توقف، cancelled, suspended, halted)
+❌ REJECT if project is historical/old (more than 2 years old)
+❌ REJECT if NOT in Saudi Arabia
+✅ ACCEPT only ACTIVE/ONGOING/UNDER CONSTRUCTION projects
+
+Required fields (use null if not found):
+- project_name: Official project name (English)
 - project_name_ar: Arabic name if mentioned
-- status: One of [Active, Ongoing, Under Construction, Planning, Announced]
-- project_owner: The client or owner
-- main_contractor: The main contractor
-- consultant: The consultant company
-- region: Saudi region (Riyadh, Makkah, Eastern Province, etc.)
-- city: Specific city
-- category: One of [Residential, Commercial, Infrastructure, Industrial, Mega Project, Healthcare, Education, Transportation, Energy, Tourism, Sports & Entertainment, Government, Mixed-Use]
-- description: Brief project description (max 200 words)
-- start_date: Project start date if mentioned (ISO format YYYY-MM-DD)
-- announcement_date: Announcement date if mentioned (ISO format)
-- project_value: Project value/budget if mentioned
-- project_size: Project size/area if mentioned
+- status: MUST be one of [Active, Ongoing, Under Construction, Planning, Announced]
+- project_owner: Client/Owner/Developer name
+- main_contractor: Main contractor company
+- consultant: Consultant/Designer company
+- region: Saudi region (Riyadh, Makkah, Eastern Province, Madinah, Asir, Jazan, etc.)
+- city: Specific city name
+- category: Choose ONE [Residential, Commercial, Infrastructure, Industrial, Mega Project, Healthcare, Education, Transportation, Energy, Tourism, Sports & Entertainment, Government, Mixed-Use]
+- description: Brief description (max 150 words)
+- start_date: Start date if mentioned (YYYY-MM-DD format)
+- announcement_date: Announcement date (YYYY-MM-DD format)
+- project_value: Budget/value (with currency, e.g., "5 billion SAR")
+- project_size: Area/size (e.g., "50,000 sqm")
 
-IMPORTANT RULES:
-1. Only extract ACTIVE/ONGOING/UNDER CONSTRUCTION projects
-2. REJECT if the project is COMPLETED, FINISHED, DELIVERED, or INAUGURATED
-3. REJECT if the project is CANCELLED, SUSPENDED, or HALTED
-4. The project MUST be in Saudi Arabia
-5. Return JSON format only
+TEXT TO ANALYZE:
+{text[:4000]}
 
-Text:
-{text[:3000]}
-
-Return ONLY valid JSON with the extracted data, or {{"rejected": true, "reason": "explanation"}} if the project should be rejected.
+Return ONLY valid JSON. If project should be rejected, return: {{"rejected": true, "reason": "explanation"}}
+Otherwise return the extracted fields as JSON object.
 """
             
             response = self.openai_client.chat.completions.create(
                 model=AI_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a construction project data extraction expert."},
+                    {"role": "system", "content": "You are an expert at extracting Saudi construction project data. Only extract ACTIVE projects. Reject completed or cancelled projects."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=AI_TEMPERATURE,
-                max_tokens=1000
+                max_tokens=1200
             )
             
             result_text = response.choices[0].message.content.strip()
             
             # Parse JSON response
-            # Remove markdown code blocks if present
             result_text = result_text.replace("```json", "").replace("```", "").strip()
             result = json.loads(result_text)
             
             # Check if rejected
             if result.get("rejected"):
-                logger.info(f"Project rejected by AI: {result.get('reason')}")
+                logger.info(f"✗ Project rejected by AI: {result.get('reason')}")
+                return None
+            
+            # Validate required fields
+            if not result.get('project_name') or not result.get('region'):
+                logger.info("✗ Project rejected: Missing required fields (name or region)")
+                return None
+            
+            # Additional status validation
+            valid_statuses = ['Active', 'Ongoing', 'Under Construction', 'Planning', 'Announced']
+            if result.get('status') not in valid_statuses:
+                logger.info(f"✗ Project rejected: Invalid status '{result.get('status')}'")
                 return None
             
             # Add source information
             result['source_url'] = source_url
             result['extracted_by'] = 'ai'
+            
+            logger.info(f"✓ AI extracted: {result.get('project_name')}")
             
             return result
             
@@ -146,23 +159,51 @@ Return ONLY valid JSON with the extracted data, or {{"rejected": true, "reason":
             return self._extract_with_rules(text, source_url)
     
     def _extract_with_rules(self, text: str, source_url: str) -> Optional[Dict[str, Any]]:
-        """Extract project information using rule-based NLP"""
-        # Check if it's a completed/cancelled project (reject immediately)
+        """Extract project information using rule-based NLP - WITH STRICT FILTERING"""
         text_lower = text.lower()
         
-        # Reject completed projects
-        for keyword in COMPLETED_KEYWORDS:
+        # STEP 1: Reject completed projects (CRITICAL)
+        completed_keywords_en = [
+            'completed', 'finished', 'delivered', 'inaugurated', 'opened', 'commissioned',
+            'handover', 'handed over', 'has been delivered', 'was completed', 'was opened'
+        ]
+        completed_keywords_ar = [
+            'تم الانتهاء', 'اكتمل', 'افتتح', 'تم افتتاح', 'تم تدشين', 'تسليم',
+            'تم التسليم', 'انتهى', 'اكتملت', 'تم الإنجاز'
+        ]
+        
+        for keyword in completed_keywords_en + completed_keywords_ar + COMPLETED_KEYWORDS:
             if keyword in text_lower:
-                logger.info(f"Project rejected: Contains completed keyword '{keyword}'")
+                logger.info(f"✗ Rejected: Contains completed keyword '{keyword}'")
                 return None
         
-        # Reject cancelled projects
-        for keyword in CANCELLED_KEYWORDS:
+        # STEP 2: Reject cancelled projects
+        cancelled_keywords_en = ['cancelled', 'canceled', 'suspended', 'halted', 'stopped', 'postponed']
+        cancelled_keywords_ar = ['ألغي', 'توقف', 'تعليق', 'إيقاف']
+        
+        for keyword in cancelled_keywords_en + cancelled_keywords_ar + CANCELLED_KEYWORDS:
             if keyword in text_lower:
-                logger.info(f"Project rejected: Contains cancelled keyword '{keyword}'")
+                logger.info(f"✗ Rejected: Contains cancelled keyword '{keyword}'")
                 return None
         
-        # Extract basic information
+        # STEP 3: Must contain active project indicators
+        active_indicators_en = [
+            'under construction', 'construction began', 'construction started', 'awarded',
+            'contract signed', 'starts construction', 'groundbreaking', 'commence',
+            'ongoing', 'in progress', 'being built', 'being developed', 'announced'
+        ]
+        active_indicators_ar = [
+            'تحت التنفيذ', 'قيد التنفيذ', 'بدء التنفيذ', 'بدأ البناء', 'جاري التنفيذ',
+            'ترسية', 'توقيع عقد', 'إطلاق', 'إعلان', 'تطوير', 'إنشاء'
+        ]
+        
+        has_active_indicator = any(ind in text_lower for ind in active_indicators_en + active_indicators_ar + ACTIVE_KEYWORDS)
+        
+        if not has_active_indicator:
+            logger.info("✗ Rejected: No active project indicators found")
+            return None
+        
+        # STEP 4: Extract information
         project_info = {
             'project_name': self._extract_project_name(text),
             'status': self._classify_status(text),
@@ -172,14 +213,21 @@ Return ONLY valid JSON with the extracted data, or {{"rejected": true, "reason":
             'project_owner': self._extract_entity(text, ['owner', 'client', 'developer']),
             'main_contractor': self._extract_entity(text, ['contractor', 'builder']),
             'consultant': self._extract_entity(text, ['consultant', 'designer', 'architect']),
-            'description': text[:300],
+            'description': text[:350].strip(),
             'source_url': source_url,
             'extracted_by': 'rules'
         }
         
-        # Must have at least project name and region
-        if not project_info['project_name'] or not project_info['region']:
+        # STEP 5: Validate minimum requirements
+        if not project_info['project_name'] or len(project_info['project_name']) < 10:
+            logger.info("✗ Rejected: Project name missing or too short")
             return None
+        
+        if not project_info['region']:
+            logger.info("✗ Rejected: Region not found")
+            return None
+        
+        logger.info(f"✓ Rule-based extracted: {project_info['project_name']}")
         
         return project_info
     
