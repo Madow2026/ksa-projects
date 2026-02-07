@@ -18,13 +18,15 @@ except ImportError:
     OPENAI_AVAILABLE = False
     logger.warning("OpenAI not available. Install with: pip install openai")
 
-# Sentence transformers for semantic similarity
+# Sentence transformers for semantic similarity (disabled for cloud - needs torch)
+TRANSFORMERS_AVAILABLE = False
 try:
     from sentence_transformers import SentenceTransformer, util
     TRANSFORMERS_AVAILABLE = True
-except ImportError:
+    logger.info("Sentence transformers available")
+except Exception as e:
     TRANSFORMERS_AVAILABLE = False
-    logger.warning("Sentence transformers not available. Install with: pip install sentence-transformers")
+    logger.warning(f"Sentence transformers not available: {e}. Using simple similarity.")
 
 import sys
 from pathlib import Path

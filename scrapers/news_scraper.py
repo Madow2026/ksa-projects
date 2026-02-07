@@ -3,7 +3,7 @@ News Scraper for Saudi Projects
 Scrapes construction and project news from various news sources
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from loguru import logger
 

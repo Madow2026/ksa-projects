@@ -17,7 +17,8 @@ sqlalchemy>=2.0.0
 
 # AI & NLP (OpenAI only for cloud deployment)
 openai>=1.10.0
-sentence-transformers>=2.3.0
+# sentence-transformers - disabled (requires torch)
+# sentence-transformers>=2.3.0
 
 # Arabic Support
 arabic-reshaper>=3.0.0

@@ -15,7 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from scrapers.scraper_orchestrator import scraper_orchestrator
 from ai_engine.nlp_engine import ai_engine
 from database.db_manager import db_manager
-from config import CONFIDENCE_THRESHOLD
+from config import CONFIDENCE_THRESHOLD, get_source_reliability
 
 
 class DataPipeline:
@@ -190,7 +190,7 @@ class DataPipeline:
                 db_manager.add_source(project_id, {
                     'source_url': source_url,
                     'source_type': source_type,
-                    'reliability_score': ai_engine.ai_engine.get_source_reliability(source_url) if hasattr(ai_engine, 'get_source_reliability') else 0.5
+                    'reliability_score': get_source_reliability(source_url)
                 })
                 
                 # Add update log
